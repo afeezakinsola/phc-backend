@@ -1,64 +1,46 @@
+
+
+
 const express = require("express");
 const router = express.Router();
-const { register, login } = require("../controllers/authController");
-const { getUsers } = require("../controllers/authController");
 const auth = require("../middleware/authMiddleware");
-const { deleteUser } = require("../controllers/authController");
 const authorize = require("../middleware/roleMiddleware");
+const {
+  register,
+  login,
+  getUsers,
+  getUserById,
+  updateUser,
+  deleteUser,
+} = require("../controllers/authController");
 
 /**
  * @swagger
  * /api/v1/auth/register:
  *   post:
- *     summary: Register a new doctor or nurse
- *     description: Creates a new user account and returns a JWT token.
- *     tags:
- *       - Auth
+ *     summary: Register a doctor or nurse account
+ *     description: Public registration is currently enabled. See the deployment security note before production use.
+ *     tags: [Auth]
+ *     security: []
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
- *             required:
- *               - name
- *               - email
- *               - password
- *               - role
+ *             required: [name, email, password, role]
  *             properties:
- *               name:
- *                 type: string
- *                 example: John Doe
- *               email:
- *                 type: string
- *                 example: doctor@test.com
- *               password:
- *                 type: string
- *                 example: Password@123
- *               role:
- *                 type: string
- *                 enum:
- *                   - doctor
- *                   - nurse
- *                 example: doctor
+ *               name: { type: string }
+ *               email: { type: string, format: email }
+ *               password: { type: string, minLength: 8 }
+ *               role: { type: string, enum: [doctor, nurse] }
  *     responses:
  *       201:
- *         description: User registered successfully.
- *         content:
- *           application/json:
- *             example:
- *               success: true
- *               message: User registered successfully
- *               token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+ *         description: Account registered.
  *       400:
- *         description: Validation error or user already exists.
- *         content:
- *           application/json:
- *             example:
- *               success: false
- *               message: User already exists
- *       500:
- *         description: Internal server error.
+ *         description: Validation error.
+ *       409:
+ *         description: Email already registered.
  */
 router.post("/register", register);
 
@@ -66,27 +48,24 @@ router.post("/register", register);
  * @swagger
  * /api/v1/auth/login:
  *   post:
- *     summary: Login user
+ *     summary: Log in a staff member
  *     tags: [Auth]
+ *     security: []
  *     requestBody:
  *       required: true
  *       content:
  *         application/json:
  *           schema:
  *             type: object
- *             required:
- *               - email
- *               - password
+ *             required: [email, password]
  *             properties:
- *               email:
- *                 type: string
- *                 example: doctor@test.com
- *               password:
- *                 type: string
- *                 example: Password@123
+ *               email: { type: string, format: email }
+ *               password: { type: string }
  *     responses:
  *       200:
- *         description: Login successful
+ *         description: Login successful; returns a JWT and public user details.
+ *       400:
+ *         description: Invalid credentials or validation error.
  */
 router.post("/login", login);
 
@@ -94,15 +73,13 @@ router.post("/login", login);
  * @swagger
  * /api/v1/auth/users:
  *   get:
- *     summary: Get all registered users
- *     description: Returns a list of all doctors and nurses. Authentication required.
- *     tags:
- *       - Auth
+ *     summary: List all doctor and nurse accounts
+ *     tags: [Staff]
  *     security:
  *       - bearerAuth: []
  *     responses:
  *       200:
- *         description: Users retrieved successfully.
+ *         description: Staff list. Password hashes are excluded.
  *       401:
  *         description: Unauthorized.
  */
@@ -111,31 +88,82 @@ router.get("/users", auth, getUsers);
 /**
  * @swagger
  * /api/v1/auth/users/{id}:
- *   delete:
- *     summary: Delete a user
- *     description: Deletes a user by ID. Only doctors are authorized to perform this action.
- *     tags:
- *       - Auth
+ *   get:
+ *     summary: Get one staff profile
+ *     description: Doctors and nurses may view individual staff profiles.
+ *     tags: [Staff]
  *     security:
  *       - bearerAuth: []
  *     parameters:
  *       - in: path
  *         name: id
  *         required: true
- *         description: MongoDB User ID
- *         schema:
- *           type: string
- *           example: 68907b8d9c4f8a1234567890
+ *         schema: { type: string }
  *     responses:
  *       200:
- *         description: User deleted successfully.
+ *         description: Staff profile retrieved. Password hash is excluded.
+ *       400:
+ *         description: Invalid staff ID.
+ *       401:
+ *         description: Unauthorized.
+ *       404:
+ *         description: Staff member not found.
+ *   patch:
+ *     summary: Update a staff profile
+ *     description: Doctors only. Only name, email and role can be updated; password updates are not accepted here.
+ *     tags: [Staff]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema: { $ref: '#/components/schemas/StaffUpdate' }
+ *     responses:
+ *       200:
+ *         description: Staff profile updated.
+ *       400:
+ *         description: Invalid ID or validation error.
  *       401:
  *         description: Unauthorized.
  *       403:
- *         description: Forbidden. Doctor role required.
+ *         description: Doctor access required.
  *       404:
- *         description: User not found.
+ *         description: Staff member not found.
+ *       409:
+ *         description: Email conflict or last-doctor protection.
+ *   delete:
+ *     summary: Delete a staff account
+ *     description: Doctors only. A doctor cannot delete their own active account or the final doctor account.
+ *     tags: [Staff]
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema: { type: string }
+ *     responses:
+ *       200:
+ *         description: Staff account deleted.
+ *       400:
+ *         description: Invalid ID or attempted self-deletion.
+ *       401:
+ *         description: Unauthorized.
+ *       403:
+ *         description: Doctor access required.
+ *       404:
+ *         description: Staff member not found.
+ *       409:
+ *         description: Cannot delete the final doctor account.
  */
+router.get("/users/:id", auth, getUserById);
+router.patch("/users/:id", auth, authorize("doctor"), updateUser);
 router.delete("/users/:id", auth, authorize("doctor"), deleteUser);
 
 module.exports = router;

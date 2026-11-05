@@ -1,3 +1,4 @@
+/*
 🏥 PHC Backend API
 
 A secure, production-ready REST API for managing patient records in a Primary Health Care center.
@@ -132,3 +133,70 @@ Grafana dashboard integration
 
 Afeez Akinsola
 Backend Developer | Node.js | Express | MongoDB | System Design
+*/
+
+# PHC Backend API
+
+Node.js and Express API for primary healthcare patient and staff management.
+
+## Core features
+
+- JWT authentication for doctor and nurse accounts
+- Role-based access control
+- Patient registration, retrieval, search, filtering, pagination, updates and PDF export
+- Multiple patient visit dates stored in `dateOfVisits`
+- Patient attachments through the existing upload middleware
+- Staff directory and individual staff profiles
+- Doctor-only staff profile updates and staff account deletion
+- Doctor and nurse patient record deletion
+- Redis patient-list caching and cache invalidation
+- Idempotency support for patient creation
+- Joi request validation
+- Swagger API documentation at `/api-docs`
+- Helmet, rate limiting, MongoDB sanitization and HTTP parameter pollution protection
+- Morgan/Winston logging and Prometheus metrics at `/metrics`
+
+## API base URL
+
+`/api/v1`
+
+## Authentication endpoints
+
+- `POST /api/v1/auth/register` — public registration is currently retained for compatibility; see the security note below.
+- `POST /api/v1/auth/login`
+- `GET /api/v1/auth/users` — authenticated doctors and nurses
+- `GET /api/v1/auth/users/:id` — authenticated doctors and nurses
+- `PATCH /api/v1/auth/users/:id` — doctors only; accepts `name`, `email`, and `role`
+- `DELETE /api/v1/auth/users/:id` — doctors only
+
+## Patient endpoints
+
+- `GET /api/v1/patients` — authenticated patient list, search, filters and pagination
+- `POST /api/v1/patients` — authenticated patient creation
+- `GET /api/v1/patients/:id` — authenticated individual patient profile
+- `PATCH /api/v1/patients/:id` — authenticated patient update
+- `DELETE /api/v1/patients/:id` — doctor and nurse
+- `GET /api/v1/patients/:id/export` — authenticated PDF export
+
+## Patient visit dates
+
+The Mongoose model stores visit dates in `dateOfVisits`, an array. The API accepts this canonical field. For backward compatibility, create/update requests may also send the former singular `dateOfVisit` field; the controller normalizes it into `dateOfVisits` before saving.
+
+## Environment variables
+
+Copy `.env.example` to `.env` for local development and supply real values. Never commit `.env` or expose secrets in frontend code.
+
+On Render, configure `FRONTEND_URL` with the exact deployed frontend origin. Multiple origins may be comma-separated. Local development origins on port 3000 are already allowed.
+
+## Important security note: public registration
+
+The existing `/auth/register` endpoint remains public in this update to avoid silently changing the current onboarding flow. It accepts a `role` value, including `doctor`. Therefore, anyone who can reach the endpoint may currently register an account with doctor privileges. This should be restricted before production use (for example, bootstrap the first doctor and then require an authenticated doctor to create additional staff accounts). Do not treat hiding the registration form in the frontend as a security control.
+
+## Run locally
+
+```bash
+npm install
+npm run dev
+```
+
+The server requires MongoDB and Redis connectivity at startup.
