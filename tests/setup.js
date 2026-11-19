@@ -1,5 +1,7 @@
+
 // tests/setup.js
 
+const auditAction = require("../middleware/auditAction");
 const mongoose = require("mongoose");
 const { MongoMemoryServer } = require("mongodb-memory-server");
 
@@ -22,7 +24,12 @@ process.env.NODE_ENV = "test";
 process.env.JWT_SECRET = "carepulse_test_secret_key_123456789";
 
 beforeAll(async () => {
-  mongoServer = await MongoMemoryServer.create();
+  // Give MongoDB Memory Server up to 60 seconds to start.
+  mongoServer = await MongoMemoryServer.create({
+    instance: {
+      launchTimeout: 60000,
+    },
+  });
 
   const mongoUri = mongoServer.getUri();
 
@@ -30,6 +37,7 @@ beforeAll(async () => {
 }, 120000);
 
 beforeEach(async () => {
+  // Clear collections before each test.
   const collections = mongoose.connection.collections;
 
   for (const collection of Object.values(collections)) {
@@ -38,6 +46,9 @@ beforeEach(async () => {
 });
 
 afterAll(async () => {
+  // Allow outstanding audit-log writes to finish first.
+  await auditAction.waitForAuditWrites();
+
   await mongoose.disconnect();
 
   if (mongoServer) {

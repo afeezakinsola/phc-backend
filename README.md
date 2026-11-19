@@ -119,7 +119,7 @@ Logs stored in:
 
 Deployed on Render:
 
-https://phc-backend-fqt7.onrender.com
+https://phc-backend-v9mb.onrender.com
 
 🔮 Future Improvements
 Docker support
@@ -200,3 +200,8 @@ npm run dev
 ```
 
 The server requires MongoDB and Redis connectivity at startup.
+
+
+## CarePulse Phase 1 security update
+
+See [CAREPULSE_SECURITY_PHASE1.md](./CAREPULSE_SECURITY_PHASE1.md) for the secure staff invitation, initial hospital setup, audit logging, environment variables, API examples, and database migration warnings. Public staff registration is disabled in this version.

@@ -1,27 +1,3 @@
-/*
-const jwt = require("jsonwebtoken");
-
-module.exports = (req, res, next) => {
-  const authHeader = req.header("Authorization");
-
-  if (!authHeader) {
-    return res.status(401).json({ message: "No token" });
-  }
-
-  const token = authHeader.startsWith("Bearer ")
-    ? authHeader.split(" ")[1]
-    : authHeader;
-
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded;
-    next();
-  } catch (err) {
-    return res.status(401).json({ message: "Invalid token" });
-  }
-};
-*/
-
 const jwt = require("jsonwebtoken");
 const User = require("../models/user");
 
@@ -64,7 +40,7 @@ module.exports = async (req, res, next) => {
       });
     }
 
-    const user = await User.findById(userId).select("_id name email role");
+    const user = await User.findById(userId).select("_id name email role hospital staffId isActive tokenVersion");
 
     if (!user) {
       return res.status(401).json({
@@ -73,12 +49,22 @@ module.exports = async (req, res, next) => {
       });
     }
 
+    if ((decoded.tokenVersion || 0) !== (user.tokenVersion || 0)) {
+      return res.status(401).json({ success: false, message: "Session has been revoked. Please log in again." });
+    }
+
+    if (!user.isActive) {
+      return res.status(401).json({ success: false, message: "User account is inactive" });
+    }
+
     // Always trust the current database role, not a possibly stale JWT claim.
     req.user = {
       id: user._id.toString(),
       name: user.name,
       email: user.email,
       role: user.role,
+      hospitalId: user.hospital ? user.hospital.toString() : null,
+      staffId: user.staffId || null,
     };
 
     return next();

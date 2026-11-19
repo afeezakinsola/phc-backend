@@ -5,6 +5,7 @@ const auth = require("../middleware/authMiddleware");
 const authorize = require("../middleware/roleMiddleware");
 const upload = require("../middleware/uploadMiddleware");
 const idempotency = require("../middleware/idempotency");
+const auditAction = require("../middleware/auditAction");
 const {
   createPatient,
   getPatients,
@@ -48,7 +49,7 @@ const {
  *       401:
  *         description: Unauthorized.
  */
-router.get("/", auth, getPatients);
+router.get("/", auth, auditAction("patient.list_viewed", "patient"), getPatients);
 
 /**
  * @swagger
@@ -91,7 +92,7 @@ router.get("/", auth, getPatients);
  *       401:
  *         description: Unauthorized.
  */
-router.post("/", auth, idempotency, upload.array("files"), createPatient);
+router.post("/", auth, idempotency, upload.array("files"), auditAction("patient.created", "patient"), createPatient);
 
 /**
  * @swagger
@@ -117,7 +118,7 @@ router.post("/", auth, idempotency, upload.array("files"), createPatient);
  *       404:
  *         description: Patient not found.
  */
-router.get("/:id", auth, getPatientById);
+router.get("/:id", auth, auditAction("patient.viewed", "patient"), getPatientById);
 
 /**
  * @swagger
@@ -147,7 +148,7 @@ router.get("/:id", auth, getPatientById);
  *       404:
  *         description: Patient not found.
  */
-router.patch("/:id", auth, updatePatient);
+router.patch("/:id", auth, auditAction("patient.updated", "patient"), updatePatient);
 
 /**
  * @swagger
@@ -175,7 +176,7 @@ router.patch("/:id", auth, updatePatient);
  *       404:
  *         description: Patient not found.
  */
-router.delete("/:id", auth, authorize("doctor", "nurse"), deletePatient);
+router.delete("/:id", auth, authorize("doctor", "nurse"), auditAction("patient.deleted", "patient"), deletePatient);
 
 /**
  * @swagger
@@ -199,6 +200,6 @@ router.delete("/:id", auth, authorize("doctor", "nurse"), deletePatient);
  *       404:
  *         description: Patient not found.
  */
-router.get("/:id/export", auth, exportPDF);
+router.get("/:id/export", auth, auditAction("patient.exported", "patient"), exportPDF);
 
 module.exports = router;

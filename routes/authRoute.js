@@ -8,18 +8,22 @@ const authorize = require("../middleware/roleMiddleware");
 const {
   register,
   login,
+  logout,
   getUsers,
   getUserById,
   updateUser,
+   reactivateUser,
   deleteUser,
 } = require("../controllers/authController");
+
+
 
 /**
  * @swagger
  * /api/v1/auth/register:
  *   post:
- *     summary: Register a doctor or nurse account
- *     description: Public registration is currently enabled. See the deployment security note before production use.
+ *     summary: Public registration disabled
+ *     description: Public registration is disabled. Staff accounts must be activated through a hospital administrator invitation.
  *     tags: [Auth]
  *     security: []
  *     requestBody:
@@ -42,7 +46,13 @@ const {
  *       409:
  *         description: Email already registered.
  */
-router.post("/register", register);
+// Public registration is intentionally disabled. Accounts are activated only
+// through a hospital-admin-issued invitation. Keep this route as a clear 403
+// for old clients rather than silently accepting legacy public registrations.
+router.post("/register", (req, res) => res.status(403).json({
+  success: false,
+  message: "Public registration is disabled. Request an invitation from your hospital administrator.",
+}));
 
 /**
  * @swagger
@@ -68,6 +78,7 @@ router.post("/register", register);
  *         description: Invalid credentials or validation error.
  */
 router.post("/login", login);
+router.post("/logout", auth, logout);
 
 /**
  * @swagger
@@ -83,7 +94,7 @@ router.post("/login", login);
  *       401:
  *         description: Unauthorized.
  */
-router.get("/users", auth, getUsers);
+router.get("/users", auth, authorize("admin"), getUsers);
 
 /**
  * @swagger
@@ -110,7 +121,7 @@ router.get("/users", auth, getUsers);
  *         description: Staff member not found.
  *   patch:
  *     summary: Update a staff profile
- *     description: Doctors only. Only name, email and role can be updated; password updates are not accepted here.
+ *     description: Hospital administrators only. Only name, email and role can be updated; password updates are not accepted here.
  *     tags: [Staff]
  *     security:
  *       - bearerAuth: []
@@ -139,7 +150,7 @@ router.get("/users", auth, getUsers);
  *         description: Email conflict or last-doctor protection.
  *   delete:
  *     summary: Delete a staff account
- *     description: Doctors only. A doctor cannot delete their own active account or the final doctor account.
+ *     description: Hospital administrators only. An administrator cannot delete their own active account or the final doctor account.
  *     tags: [Staff]
  *     security:
  *       - bearerAuth: []
@@ -162,8 +173,14 @@ router.get("/users", auth, getUsers);
  *       409:
  *         description: Cannot delete the final doctor account.
  */
-router.get("/users/:id", auth, getUserById);
-router.patch("/users/:id", auth, authorize("doctor"), updateUser);
-router.delete("/users/:id", auth, authorize("doctor"), deleteUser);
+router.get("/users/:id", auth, authorize("admin"), getUserById);
+router.patch("/users/:id", auth, authorize("admin"), updateUser);
+router.delete("/users/:id", auth, authorize("admin"), deleteUser);
+router.patch(
+  "/users/:id/reactivate",
+  auth,
+  authorize("admin"),
+  reactivateUser
+);
 
 module.exports = router;
