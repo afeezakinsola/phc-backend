@@ -5,6 +5,9 @@ const auditAction = require("../middleware/auditAction");
 const mongoose = require("mongoose");
 const { MongoMemoryServer } = require("mongodb-memory-server");
 
+
+// Give database operations and test setup enough time to complete.
+jest.setTimeout(30000);
 // Mock Redis so tests don't need a real Redis connection.
 jest.mock("../config/redis", () => ({
   get: jest.fn().mockResolvedValue(null),
