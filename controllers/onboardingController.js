@@ -341,24 +341,69 @@ exports.revokeInvitation = async (req, res, next) => {
   } catch (error) { return next(error); }
 };
 
+
 exports.listAuditLogs = async (req, res, next) => {
   try {
-    const AuditLog = require('../models/auditLog');
-    const page = Math.max(Number.parseInt(req.query.page, 10) || 1, 1);
-    const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 25, 1), 100);
-    const query = { hospital: req.user.hospitalId };
-    if (req.query.action) query.action = req.query.action;
-    if (req.query.actor) {
-  if (!mongoose.isValidObjectId(req.query.actor)) {
-    return res.status(400).json({
-      success: false,
-      message: 'Invalid actor ID',
-    });
-  }
+    const AuditLog = require("../models/auditLog");
 
-  query.actor = req.query.actor;
-}
-    const [data, total] = await Promise.all([AuditLog.find(query).sort({ createdAt: -1 }).skip((page - 1) * limit).limit(limit).lean(), AuditLog.countDocuments(query)]);
-    return res.json({ success: true, page, limit, total, data });
-  } catch (error) { return next(error); }
+    const hospitalId = req.user?.hospitalId;
+
+    if (!hospitalId || !mongoose.isValidObjectId(hospitalId)) {
+      return res.status(403).json({
+        success: false,
+        message: "Your account is not linked to a valid health centre.",
+      });
+    }
+
+    const page = Math.max(
+      Number.parseInt(req.query.page, 10) || 1,
+      1
+    );
+
+    const limit = Math.min(
+      Math.max(Number.parseInt(req.query.limit, 10) || 25, 1),
+      100
+    );
+
+    const query = { hospital: hospitalId };
+
+    if (req.query.action) {
+      query.action = req.query.action;
+    }
+
+    if (req.query.actor) {
+      if (!mongoose.isValidObjectId(req.query.actor)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid actor ID",
+        });
+      }
+
+      query.actor = req.query.actor;
+    }
+
+    const [data, total] = await Promise.all([
+      AuditLog.find(query)
+        .select(
+          "actor actorName actorRole action resourceType resourceId outcome metadata createdAt"
+        )
+        .sort({ createdAt: -1 })
+        .skip((page - 1) * limit)
+        .limit(limit)
+        .lean(),
+
+      AuditLog.countDocuments(query),
+    ]);
+
+    return res.status(200).json({
+      success: true,
+      page,
+      limit,
+      total,
+      totalPages: Math.ceil(total / limit),
+      data,
+    });
+  } catch (error) {
+    return next(error);
+  }
 };

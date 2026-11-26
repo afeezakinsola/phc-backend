@@ -62,10 +62,18 @@ const auditLogSchema = new mongoose.Schema(
   }
 );
 
+// Allow new audit records, but prevent changes to existing documents.
+auditLogSchema.pre("save", function () {
+  if (!this.isNew) {
+    throw new Error("Audit logs are append-only.");
+  }
+});
+
 // Prevent common Mongoose query operations from modifying audit records.
 const preventAuditModification = function () {
   throw new Error("Audit logs are append-only.");
 };
+
 
 const preventAuditDeletion = function () {
   throw new Error("Audit logs cannot be deleted.");
