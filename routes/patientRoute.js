@@ -49,7 +49,14 @@ const {
  *       401:
  *         description: Unauthorized.
  */
-router.get("/", auth, auditAction("patient.list_viewed", "patient"), getPatients);
+router.get(
+  "/",
+  auth,
+  authorize("doctor", "nurse"),
+  auditAction("patient.list_viewed", "patient"),
+  getPatients
+);
+
 
 /**
  * @swagger
@@ -92,7 +99,16 @@ router.get("/", auth, auditAction("patient.list_viewed", "patient"), getPatients
  *       401:
  *         description: Unauthorized.
  */
-router.post("/", auth, idempotency, upload.array("files"), auditAction("patient.created", "patient"), createPatient);
+router.post(
+  "/",
+  auth,
+  authorize("doctor", "nurse"),
+  idempotency,
+  upload.array("files"),
+  auditAction("patient.created", "patient"),
+  createPatient
+);
+
 
 /**
  * @swagger
@@ -118,7 +134,15 @@ router.post("/", auth, idempotency, upload.array("files"), auditAction("patient.
  *       404:
  *         description: Patient not found.
  */
-router.get("/:id", auth, auditAction("patient.viewed", "patient"), getPatientById);
+// Only doctors and nurses can view an individual patient.
+router.get(
+  "/:id",
+  auth,
+  authorize("doctor", "nurse"),
+  auditAction("patient.viewed", "patient"),
+  getPatientById
+);
+
 
 /**
  * @swagger
@@ -148,7 +172,15 @@ router.get("/:id", auth, auditAction("patient.viewed", "patient"), getPatientByI
  *       404:
  *         description: Patient not found.
  */
-router.patch("/:id", auth, auditAction("patient.updated", "patient"), updatePatient);
+// Only doctors and nurses can update patient records.
+router.patch(
+  "/:id",
+  auth,
+  authorize("doctor", "nurse"),
+  auditAction("patient.updated", "patient"),
+  updatePatient
+);
+
 
 /**
  * @swagger
@@ -176,7 +208,15 @@ router.patch("/:id", auth, auditAction("patient.updated", "patient"), updatePati
  *       404:
  *         description: Patient not found.
  */
-router.delete("/:id", auth, authorize("doctor", "nurse"), auditAction("patient.deleted", "patient"), deletePatient);
+// Only doctors and nurses can delete patient records.
+router.delete(
+  "/:id",
+  auth,
+  authorize("doctor"),
+  auditAction("patient.deleted", "patient"),
+  deletePatient
+);
+
 
 /**
  * @swagger
@@ -200,6 +240,29 @@ router.delete("/:id", auth, authorize("doctor", "nurse"), auditAction("patient.d
  *       404:
  *         description: Patient not found.
  */
-router.get("/:id/export", auth, auditAction("patient.exported", "patient"), exportPDF);
+// Only doctors and nurses can export patient records.
+router.get(
+  "/:id/export",
+  auth,
+  authorize("doctor", "nurse"),
+  auditAction("patient.exported", "patient"),
+  exportPDF
+);
+
 
 module.exports = router;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

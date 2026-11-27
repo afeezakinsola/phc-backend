@@ -2,12 +2,13 @@
 const request = require("supertest");
 const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
-
 const app = require("../app");
+
 const User = require("../models/user");
 const Hospital = require("../models/hospital");
 const AuditLog = require("../models/auditLog");
 const auditAction = require("../middleware/auditAction");
+
 // Create a hospital and an authenticated user for each test.
 const createAuthenticatedUser = async (role = "doctor") => {
   const hospital = await Hospital.create({
@@ -28,7 +29,6 @@ const createAuthenticatedUser = async (role = "doctor") => {
     tokenVersion: 0,
   });
 
-  // The authentication middleware checks the user ID and token version.
   const token = jwt.sign(
     {
       id: user._id.toString(),
@@ -38,11 +38,7 @@ const createAuthenticatedUser = async (role = "doctor") => {
     { expiresIn: "1h" }
   );
 
-  return {
-    hospital,
-    user,
-    token,
-  };
+  return { hospital, user, token };
 };
 
 // Reusable valid patient information.
@@ -78,8 +74,7 @@ const validPatient = (overrides = {}) => ({
   ...overrides,
 });
 
-// Patient responses may be wrapped differently by different endpoints.
-// This helper extracts the patient object without depending on the wrapper.
+// Extract the patient object from different response wrappers.
 const extractPatient = (body) => {
   return body?.data?.patient || body?.data || body?.patient || body;
 };
@@ -87,7 +82,6 @@ const extractPatient = (body) => {
 describe("CarePulse Patient API", () => {
   let doctor;
 
-  // Create a fresh doctor and hospital before each test.
   beforeEach(async () => {
     doctor = await createAuthenticatedUser("doctor");
   });
@@ -119,30 +113,29 @@ describe("CarePulse Patient API", () => {
     });
 
     it("should record the created patient's ID in the audit log", async () => {
-  const response = await request(app)
-    .post("/api/v1/patients")
-    .set("Authorization", `Bearer ${doctor.token}`)
-    .send(validPatient());
+      const response = await request(app)
+        .post("/api/v1/patients")
+        .set("Authorization", `Bearer ${doctor.token}`)
+        .send(validPatient());
 
-  expect(response.statusCode).toBe(201);
+      expect(response.statusCode).toBe(201);
 
-  // Wait for the response-finish audit middleware to save its record.
-  await auditAction.waitForAuditWrites();
+      await auditAction.waitForAuditWrites();
 
-  const patient = extractPatient(response.body);
+      const patient = extractPatient(response.body);
 
-  const auditLog = await AuditLog.findOne({
-    action: "patient.created",
-    resourceType: "patient",
-    resourceId: patient._id.toString(),
-  });
+      const auditLog = await AuditLog.findOne({
+        action: "patient.created",
+        resourceType: "patient",
+        resourceId: patient._id.toString(),
+      });
 
-  expect(auditLog).not.toBeNull();
-  expect(auditLog.actor.toString()).toBe(doctor.user._id.toString());
-  expect(auditLog.actorName).toBe(doctor.user.name);
-  expect(auditLog.outcome).toBe("success");
-  expect(auditLog.createdAt).toBeInstanceOf(Date);
-});
+      expect(auditLog).not.toBeNull();
+      expect(auditLog.actor.toString()).toBe(doctor.user._id.toString());
+      expect(auditLog.actorName).toBe(doctor.user.name);
+      expect(auditLog.outcome).toBe("success");
+      expect(auditLog.createdAt).toBeInstanceOf(Date);
+    });
 
     it("should reject a patient with invalid NIN", async () => {
       const response = await request(app)
@@ -176,12 +169,10 @@ describe("CarePulse Patient API", () => {
       const secondResponse = await request(app)
         .post("/api/v1/patients")
         .set("Authorization", `Bearer ${doctor.token}`)
-        .send(
-          validPatient({
-            firstName: "Jane",
-            nin: "12345678901",
-          })
-        );
+        .send(validPatient({
+          firstName: "Jane",
+          nin: "12345678901",
+        }));
 
       expect(secondResponse.statusCode).toBe(409);
     });
@@ -228,15 +219,12 @@ describe("CarePulse Patient API", () => {
         .send(validPatient());
 
       const patient = extractPatient(createResponse.body);
-
-      // Create another hospital and a doctor who belongs to it.
       const anotherDoctor = await createAuthenticatedUser("doctor");
 
       const response = await request(app)
         .get(`/api/v1/patients/${patient._id}`)
         .set("Authorization", `Bearer ${anotherDoctor.token}`);
 
-      // The patient exists, but does not belong to this doctor's hospital.
       expect(response.statusCode).toBe(404);
     });
   });
@@ -264,7 +252,7 @@ describe("CarePulse Patient API", () => {
       expect(updatedPatient.diagnosis).toBe("Typhoid fever");
     });
 
-    it("should append new vital readings instead of replacing the previous readings", async () => {
+    it("should append new vital readings instead of replacing previous readings", async () => {
       const createResponse = await request(app)
         .post("/api/v1/patients")
         .set("Authorization", `Bearer ${doctor.token}`)
@@ -313,14 +301,29 @@ describe("CarePulse Patient API", () => {
       expect(response.statusCode).toBe(200);
     });
 
-    it("should reject an admin if the route only permits doctors and nurses", async () => {
+    it("should reject a nurse attempting to delete a patient", async () => {
       const createResponse = await request(app)
         .post("/api/v1/patients")
         .set("Authorization", `Bearer ${doctor.token}`)
         .send(validPatient());
 
       const patient = extractPatient(createResponse.body);
+      const nurse = await createAuthenticatedUser("nurse");
 
+      const response = await request(app)
+        .delete(`/api/v1/patients/${patient._id}`)
+        .set("Authorization", `Bearer ${nurse.token}`);
+
+      expect(response.statusCode).toBe(403);
+    });
+
+    it("should reject an admin attempting to delete a patient", async () => {
+      const createResponse = await request(app)
+        .post("/api/v1/patients")
+        .set("Authorization", `Bearer ${doctor.token}`)
+        .send(validPatient());
+
+      const patient = extractPatient(createResponse.body);
       const admin = await createAuthenticatedUser("admin");
 
       const response = await request(app)
@@ -348,4 +351,72 @@ describe("CarePulse Patient API", () => {
       expect(response.headers["content-type"]).toMatch(/application\/pdf/);
     });
   });
+
+  describe("Hospital admin patient access restrictions", () => {
+    let admin;
+    let patientId;
+
+    beforeEach(async () => {
+      admin = await createAuthenticatedUser("admin");
+
+      const response = await request(app)
+        .post("/api/v1/patients")
+        .set("Authorization", `Bearer ${doctor.token}`)
+        .send(validPatient());
+
+      patientId = extractPatient(response.body)._id;
+    });
+
+    it("should reject an admin attempting to list patients", async () => {
+      const response = await request(app)
+        .get("/api/v1/patients")
+        .set("Authorization", `Bearer ${admin.token}`);
+
+      expect(response.statusCode).toBe(403);
+    });
+
+    it("should reject an admin attempting to register a patient", async () => {
+      const response = await request(app)
+        .post("/api/v1/patients")
+        .set("Authorization", `Bearer ${admin.token}`)
+        .send(validPatient({ nin: "12345678902" }));
+
+      expect(response.statusCode).toBe(403);
+    });
+
+    it("should reject an admin attempting to view a patient", async () => {
+      const response = await request(app)
+        .get(`/api/v1/patients/${patientId}`)
+        .set("Authorization", `Bearer ${admin.token}`);
+
+      expect(response.statusCode).toBe(403);
+    });
+
+    it("should reject an admin attempting to update a patient", async () => {
+      const response = await request(app)
+        .patch(`/api/v1/patients/${patientId}`)
+        .set("Authorization", `Bearer ${admin.token}`)
+        .send({ diagnosis: "Unauthorized update" });
+
+      expect(response.statusCode).toBe(403);
+    });
+
+    it("should reject an admin attempting to delete a patient", async () => {
+      const response = await request(app)
+        .delete(`/api/v1/patients/${patientId}`)
+        .set("Authorization", `Bearer ${admin.token}`);
+
+      expect(response.statusCode).toBe(403);
+    });
+
+    it("should reject an admin attempting to export a patient record", async () => {
+      const response = await request(app)
+        .get(`/api/v1/patients/${patientId}/export`)
+        .set("Authorization", `Bearer ${admin.token}`);
+
+      expect(response.statusCode).toBe(403);
+    });
+  });
+
+  
 });
